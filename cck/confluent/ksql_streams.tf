@@ -124,24 +124,19 @@ EOF
 # Simple test resource for ksqlDB functionality
 resource "null_resource" "ksql_test" {
   provisioner "local-exec" {
-    interpreter = ["/bin/bash", "-c"]
-    command     = <<-EOT
+    command = <<-EOT
       echo "Running basic ksqlDB test..."
       echo "Endpoint: ${confluent_ksql_cluster.ksql.rest_endpoint}"
       
-      # First try a simple GET request to check basic connectivity
-      echo "\nTesting basic connectivity..."
-      curl -v "${confluent_ksql_cluster.ksql.rest_endpoint}/info" \
-        -H "Accept: application/vnd.ksql.v1+json" \
-        -u "${confluent_api_key.ksqldb-api-key.id}:${confluent_api_key.ksqldb-api-key.secret}"
-
-      # Then try listing streams
-      echo "\nTesting LIST STREAMS command..."
-      curl -v -X "POST" "${confluent_ksql_cluster.ksql.rest_endpoint}/ksql" \
+      # Test listing streams
+      response=$(curl -s -X "POST" "${confluent_ksql_cluster.ksql.rest_endpoint}/ksql" \
         -H "Content-Type: application/vnd.ksql.v1+json" \
         -H "Accept: application/vnd.ksql.v1+json" \
         -u "${confluent_api_key.ksqldb-api-key.id}:${confluent_api_key.ksqldb-api-key.secret}" \
-        -d '{"ksql": "LIST STREAMS;"}'
+        -d '{"ksql": "LIST STREAMS;"}')
+      
+      echo "Response from ksqlDB:"
+      echo "$response"
     EOT
   }
 
