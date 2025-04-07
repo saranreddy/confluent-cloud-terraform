@@ -1,0 +1,25 @@
+env:
+  ck_env_name: "dev"
+  ck_cluster_name: "dev-cluster"
+  ck_cluster_zone: "us-east-2"
+  ck_cluster_size: "basic"
+  ck_csu: 1
+  ck_rest_endpoint: "https://pkc-xxxxx.us-east-2.aws.confluent.cloud:443"
+
+  # PostgreSQL Connector Configuration
+  postgres_host: "vpce-03cb75e950bbbac70-ptwgjqol.vpce-svc-0779b76d3fbee5cae.us-east-2.vpce.amazonaws.com"
+  postgres_port: "8432"
+  postgres_user: "DEV_CF_MSG_SVC"
+  postgres_password: "your-password-here" # Replace with actual password or use secrets management
+  postgres_database: "Deposit_ODS"
+
+  # Topic configurations for dev environment
+  topics:
+    cdc_account_master_o_1200:
+      partitions_count: 6
+      retention_ms: 86400000 # 1 day
+    unified_records:
+      partitions_count: 6
+    unified_records_test:
+      partitions_count: 6
+      retention_ms: 604800000 # 7 days

@@ -1,0 +1,5 @@
+env:
+  ck_env_name: "Prod_tf"
+  ck_cluster_name: "Cluster_Prod_tf"
+  ck_cluster_zone: "MULTI_ZONE"
+  ck_cluster_size: 2

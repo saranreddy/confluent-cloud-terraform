@@ -1,0 +1,5 @@
+env:
+  ck_env_name: "QA_tf"
+  ck_cluster_name: "Cluster_QA_tf"
+  ck_cluster_zone: "MULTI_ZONE"
+  ck_cluster_size: 2
