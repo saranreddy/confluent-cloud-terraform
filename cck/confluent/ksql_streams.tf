@@ -39,13 +39,15 @@ resource "null_resource" "ksql_statements" {
   provisioner "local-exec" {
     interpreter = ["/bin/bash", "-c"]
     command     = <<-EOT
-      # Print debug information
-      echo "Debug: Starting ksqlDB stream creation"
-      echo "Debug: ksqlDB endpoint: ${confluent_ksql_cluster.ksql.rest_endpoint}"
-      echo "Debug: API Key ID: ${confluent_api_key.ksqldb-api-key.id}"
+      # Print detailed debug information about the ksqlDB cluster
+      echo "Debug: ksqlDB Cluster Information:"
+      echo "  - Endpoint: ${confluent_ksql_cluster.ksql.rest_endpoint}"
+      echo "  - Cluster Name: ${confluent_ksql_cluster.ksql.display_name}"
+      echo "  - Environment ID: ${confluent_ksql_cluster.ksql.environment[0].id}"
+      echo "  - API Key ID: ${confluent_api_key.ksqldb-api-key.id}"
       
       # Test basic connectivity first with verbose output
-      echo "Testing basic connectivity..."
+      echo "Testing basic connectivity to cluster ${confluent_ksql_cluster.ksql.display_name}..."
       curl -v "${confluent_ksql_cluster.ksql.rest_endpoint}" 2>&1
       
       # Function to make ksqlDB API calls with verbose output
@@ -64,12 +66,12 @@ resource "null_resource" "ksql_statements" {
       }
 
       # First, try to list existing streams
-      echo "Attempting to list existing streams..."
+      echo "Attempting to list existing streams on cluster ${confluent_ksql_cluster.ksql.display_name}..."
       list_response=$(call_ksqldb "${confluent_ksql_cluster.ksql.rest_endpoint}/ksql" '{"ksql": "LIST STREAMS;"}')
       echo "List streams response: $list_response"
 
       # Try to create the stream with explicit error handling
-      echo "Attempting to create stream..."
+      echo "Attempting to create stream on cluster ${confluent_ksql_cluster.ksql.display_name}..."
       create_data=$(cat <<EOF
 {
   "ksql": "${replace(replace(each.value.sql, "\n", " "), "\"", "\\\"")}",
@@ -107,7 +109,7 @@ EOF
         exit 1
       fi
 
-      echo "Stream creation completed successfully"
+      echo "Stream creation completed successfully on cluster ${confluent_ksql_cluster.ksql.display_name}"
     EOT
   }
 
