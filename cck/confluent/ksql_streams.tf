@@ -33,61 +33,67 @@ resource "null_resource" "ksql_statements" {
 
   triggers = {
     sql_hash = sha256(each.value.sql)
-    name     = each.value.name  # Add name to triggers for better tracking
+    name     = each.value.name
   }
 
   provisioner "local-exec" {
-    command = <<-EOT
+    interpreter = ["/bin/bash", "-c"]
+    command     = <<-EOT
       # Wait for ksqlDB cluster to be ready (retry for 5 minutes)
       max_retries=30
       retry_count=0
-      while [ $retry_count -lt $max_retries ]; do
+      while [ "$retry_count" -lt "$max_retries" ]; do
         status_code=$(curl -s -o /dev/null -w "%%{http_code}" \
           "${confluent_ksql_cluster.ksql.rest_endpoint}/info" \
           -H "Accept: application/vnd.ksql.v1+json" \
           -u "${confluent_api_key.ksqldb-api-key.id}:${confluent_api_key.ksqldb-api-key.secret}")
         
-        if [ "$status_code" -eq 200 ]; then
+        if [ "$status_code" = "200" ]; then
           break
         fi
-        echo "Waiting for ksqlDB cluster to be ready... (Attempt $$((retry_count + 1)) of $max_retries)"
+        echo "Waiting for ksqlDB cluster to be ready... (Attempt $((retry_count + 1)) of $max_retries)"
         sleep 10
-        retry_count=$$((retry_count + 1))
+        retry_count=$((retry_count + 1))
       done
 
-      if [ $retry_count -eq $max_retries ]; then
+      if [ "$retry_count" -eq "$max_retries" ]; then
         echo "Error: ksqlDB cluster not ready after 5 minutes"
         exit 1
       fi
 
-      # Attempt to execute ksqlDB statement
+      # Attempt to execute ksqlDB statement with proper JSON escaping
       response=$(curl -s -X "POST" "${confluent_ksql_cluster.ksql.rest_endpoint}/ksql" \
         -H "Content-Type: application/vnd.ksql.v1+json" \
         -H "Accept: application/vnd.ksql.v1+json" \
         -u "${confluent_api_key.ksqldb-api-key.id}:${confluent_api_key.ksqldb-api-key.secret}" \
-        -d '{
-          "ksql": "${replace(each.value.sql, "\n", " ")}",
-          "streamsProperties": {
-            "ksql.streams.auto.offset.reset": "earliest",
-            "ksql.streams.cache.max.bytes.buffering": "0"
-          }
-        }')
-
-      # Get HTTP status code
-      status_code=$(echo "$response" | grep -o '"status": [0-9]*' | awk '{print $2}')
+        -d @- <<CURL_DATA
+{
+  "ksql": "${replace(replace(each.value.sql, "\n", " "), "\"", "\\\"")}",
+  "streamsProperties": {
+    "ksql.streams.auto.offset.reset": "earliest",
+    "ksql.streams.cache.max.bytes.buffering": "0"
+  }
+}
+CURL_DATA
+)
 
       # Print full response for debugging
       echo "ksqlDB Response: $response"
 
-      # Check if the request was successful
-      if [ "$status_code" -ne 200 ]; then
-        echo "Failed to create ksqlDB object ${each.value.name}. Response: $response"
+      # Check if the response contains an error message
+      if echo "$response" | grep -q '"error_code":'; then
+        echo "Failed to create ksqlDB object ${each.value.name}. Error response: $response"
+        exit 1
+      fi
+
+      # Check if the response indicates success
+      if ! echo "$response" | grep -q '"commandStatus":"SUCCESS"'; then
+        echo "Failed to create ksqlDB object ${each.value.name}. Unexpected response: $response"
         exit 1
       fi
     EOT
   }
 
-  # Add lifecycle block to handle failures
   lifecycle {
     create_before_destroy = true
   }
