@@ -1,5 +1,25 @@
 env:
-  ck_env_name: "QA_tf"
-  ck_cluster_name: "Cluster_QA_tf"
-  ck_cluster_zone: "MULTI_ZONE"
-  ck_cluster_size: 2
+  # Confluent Cloud Settings
+  ck_env_name: "QA-tf"
+  ck_cluster_name: "Cluster QA-tf"
+  ck_cluster_zone: "SINGLE_ZONE"
+  ck_cluster_size: 1
+  ck_csu: 1
+  ck_rest_endpoint: "https://pkc-190gw6.us-east-2.aws.confluent.cloud:443" # Update this with QA endpoint
+
+  # PostgreSQL Connector Configuration
+  postgres_host: "vpce-03cb75e950bbbac70-ptwgiqol.vpce-svc-0779b76d3fbee5cae.us-east-2.vpce.amazonaws.com"
+  postgres_port: "8432"
+  postgres_user: "QA_CF_MSG_SVC"
+  postgres_password: "ctXyaK.8-Ho4"
+  postgres_database: "Deposit_ODS"
+
+  # Topic configurations for QA environment
+  topics:
+    cdc_account_master_o_1200:
+      partitions_count: 6
+      retention_ms: 86400000 # 1 day
+    unified_records:
+      partitions_count: 6
+    unified_records_test:
+      partitions_count: 6
