@@ -16,24 +16,6 @@ locals {
   }
 }
 
-# Create ksqlDB cluster
-resource "confluent_ksql_cluster" "main" {
-  display_name = "${local.ck_env_name}-ksqldb"
-  csu = 1
-  kafka_cluster {
-    id = data.confluent_kafka_cluster.cluster.id
-  }
-  credential_identity {
-    id = confluent_service_account.ksqldb.id
-  }
-  environment {
-    id = data.confluent_environment.env.id
-  }
-  depends_on = [
-    confluent_role_binding.ksqldb_admin
-  ]
-}
-
 # Create KsqlDB streams and tables
 resource "null_resource" "ksql_statements" {
   for_each = local.ksql_config
@@ -44,7 +26,7 @@ resource "null_resource" "ksql_statements" {
 
   provisioner "local-exec" {
     command = <<-EOT
-      curl -X "POST" "${confluent_ksql_cluster.main.rest_endpoint}/ksql" \
+      curl -X "POST" "${confluent_ksql_cluster.ksql.rest_endpoint}/ksql" \
         -H "Content-Type: application/vnd.ksql.v1+json" \
         -H "Accept: application/vnd.ksql.v1+json" \
         -u "${confluent_api_key.ksqldb-api-key.id}:${confluent_api_key.ksqldb-api-key.secret}" \
@@ -56,7 +38,6 @@ resource "null_resource" "ksql_statements" {
   }
 
   depends_on = [
-    confluent_ksql_cluster.main,
     confluent_kafka_topic.topics
   ]
 } 
