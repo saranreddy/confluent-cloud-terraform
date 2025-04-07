@@ -2,51 +2,21 @@
 locals {
   # Base ksqlDB configurations
   ksql_config = {
-    # Stream for unified records
-    unified_records_stream = {
-      name = "UNIFIED_RECORDS_STREAM"
+    # Stream for CDC customer data
+    cdc_customer_stream = {
+      name = "CDC_CUSTOMER_O_24201_SOURCE_STREAM"
       sql  = <<-EOT
-        CREATE STREAM IF NOT EXISTS UNIFIED_RECORDS_STREAM (
-          RECORD_ID VARCHAR,
-          CUSTOMER_ID VARCHAR,
-          ACCOUNT_NUMBER VARCHAR,
-          TRANSACTION_TYPE VARCHAR,
-          TRANSACTION_AMOUNT DECIMAL(10,2),
-          TRANSACTION_TIMESTAMP TIMESTAMP
-        ) WITH (
-          KAFKA_TOPIC = 'unified_records',
-          VALUE_FORMAT = 'AVRO',
-          TIMESTAMP = 'TRANSACTION_TIMESTAMP'
-        );
-      EOT
-    }
-
-    # Table for customer aggregations
-    customer_transactions_table = {
-      name = "CUSTOMER_TRANSACTIONS"
-      sql  = <<-EOT
-        CREATE TABLE IF NOT EXISTS CUSTOMER_TRANSACTIONS
+        CREATE STREAM IF NOT EXISTS cdc_customer_o_24201_source_stream 
         WITH (
-          KAFKA_TOPIC = '${local.ck_env_name}_customer_transactions',
-          VALUE_FORMAT = 'AVRO',
-          PARTITIONS = 6,
-          REPLICAS = 3
-        ) AS
-        SELECT
-          CUSTOMER_ID,
-          COUNT(*) AS TOTAL_TRANSACTIONS,
-          SUM(TRANSACTION_AMOUNT) AS TOTAL_AMOUNT,
-          LATEST_BY_OFFSET(ACCOUNT_NUMBER) AS LAST_ACCOUNT,
-          COLLECT_LIST(TRANSACTION_TYPE) AS TRANSACTION_TYPES
-        FROM UNIFIED_RECORDS_STREAM
-        WINDOW TUMBLING (SIZE 24 HOURS)
-        GROUP BY CUSTOMER_ID;
+          KAFKA_TOPIC = 'cdc_customer_o_24201',
+          VALUE_FORMAT = 'AVRO'
+        );
       EOT
     }
   }
 }
 
-# Create ksqlDB statements
+# Create ksqlDB cluster
 resource "confluent_ksql_cluster" "main" {
   display_name = "${local.ck_env_name}-ksqldb"
   csu = 1
