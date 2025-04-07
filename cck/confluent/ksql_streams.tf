@@ -43,21 +43,26 @@ resource "null_resource" "ksql_statements" {
       max_retries=30
       retry_count=0
       while [ "$retry_count" -lt "$max_retries" ]; do
-        status_code=$(curl -s -o /dev/null -w "%%{http_code}" \
-          "${confluent_ksql_cluster.ksql.rest_endpoint}/info" \
+        # Try to list streams to check if cluster is ready
+        response=$(curl -s -X "POST" "${confluent_ksql_cluster.ksql.rest_endpoint}/ksql" \
+          -H "Content-Type: application/vnd.ksql.v1+json" \
           -H "Accept: application/vnd.ksql.v1+json" \
-          -u "${confluent_api_key.ksqldb-api-key.id}:${confluent_api_key.ksqldb-api-key.secret}")
+          -u "${confluent_api_key.ksqldb-api-key.id}:${confluent_api_key.ksqldb-api-key.secret}" \
+          -d '{"ksql": "LIST STREAMS;"}')
         
-        if [ "$status_code" = "200" ]; then
+        # Check if the response indicates the cluster is ready
+        if echo "$response" | grep -q '"@type":"streams"'; then
+          echo "ksqlDB cluster is ready!"
           break
         fi
+        
         echo "Waiting for ksqlDB cluster to be ready... (Attempt $((retry_count + 1)) of $max_retries)"
         sleep 10
         retry_count=$((retry_count + 1))
       done
 
       if [ "$retry_count" -eq "$max_retries" ]; then
-        echo "Error: ksqlDB cluster not ready after 5 minutes"
+        echo "Error: ksqlDB cluster not ready after 5 minutes. Last response: $response"
         exit 1
       fi
 
@@ -81,13 +86,13 @@ CURL_DATA
       echo "ksqlDB Response: $response"
 
       # Check if the response contains an error message
-      if echo "$response" | grep -q '"error_code":'; then
+      if echo "$response" | grep -q '"errorMessage"'; then
         echo "Failed to create ksqlDB object ${each.value.name}. Error response: $response"
         exit 1
       fi
 
-      # Check if the response indicates success
-      if ! echo "$response" | grep -q '"commandStatus":"SUCCESS"'; then
+      # Check if the response indicates success (either command status or statement text)
+      if ! echo "$response" | grep -q -e '"commandStatus":"SUCCESS"' -e '"statementText"'; then
         echo "Failed to create ksqlDB object ${each.value.name}. Unexpected response: $response"
         exit 1
       fi
