@@ -4,6 +4,7 @@ This repository contains Terraform configurations for managing Confluent Cloud i
 
 ## Table of Contents
 1. [Topic Management](#topic-management)
+   - [Topic Configuration Structure](#topic-configuration-structure)
    - [Adding New Topics](#adding-new-topics)
    - [Topic Configuration Options](#topic-configuration-options)
    - [Topic Best Practices](#topic-best-practices)
@@ -20,34 +21,68 @@ This repository contains Terraform configurations for managing Confluent Cloud i
 
 ## Topic Management
 
+### Topic Configuration Structure
+
+The topic configuration follows a hierarchical approach:
+
+1. **Global Default Settings** (`global.yaml`)
+   ```yaml
+   global:
+     topic_defaults:
+       partitions_count: 6
+       retention_ms: 604800000  # 7 days
+       cleanup_policy: "delete"
+       retention_bytes: -1
+   ```
+
+2. **Global Topic Configurations** (`global.yaml`)
+   ```yaml
+   global:
+     base_topics:
+       your_new_topic:
+         partitions_count: 6
+         retention_ms: 604800000
+         cleanup_policy: "delete"
+         retention_bytes: -1
+   ```
+
+3. **Environment-Specific Overrides** (`dev.yaml`, `qa.yaml`, etc.)
+   ```yaml
+   env:
+     topics:
+       your_new_topic:
+         partitions_count: 12  # Override for this environment
+         retention_ms: 86400000  # 1 day retention for this environment
+   ```
+
 ### Adding New Topics
 
 1. **Add Base Topic Configuration**
-   Add the new topic to the base configuration in `topics.tf`:
-   ```hcl
-   base_topics = {
-     your_new_topic = {
-       partitions_count = 6
-       retention_ms    = 604800000  # 7 days
-       cleanup_policy  = "delete"
-       retention_bytes = -1         # unlimited
-     }
-   }
+   Add the new topic to `global.yaml`:
+   ```yaml
+   global:
+     base_topics:
+       your_new_topic:
+         partitions_count: 6
+         retention_ms: 604800000  # 7 days
+         cleanup_policy: "delete"
+         retention_bytes: -1
    ```
 
 2. **Configure Environment-Specific Settings (Optional)**
    Add overrides in environment YAML files:
    ```yaml
    # environments/dev.yaml
-   topics:
-     your_new_topic:
-       partitions_count: 6
-       retention_ms: 86400000  # 1 day
+   env:
+     topics:
+       your_new_topic:
+         partitions_count: 6
+         retention_ms: 86400000  # 1 day
    ```
 
 3. **Apply Changes**
    ```bash
-   terraform workspace select dev  # or staging/prod
+   terraform workspace select dev  # or qa/prod
    terraform apply
    ```
 
@@ -68,44 +103,62 @@ This repository contains Terraform configurations for managing Confluent Cloud i
 
 ### Topic Best Practices
 
-1. **Partition Count**
+1. **Configuration Management**
+   - Define common settings in `topic_defaults`
+   - Use `base_topics` for standard configurations
+   - Override only necessary settings in environment files
+
+2. **Partition Count**
    - Start with 6 partitions for new topics
    - Increase based on expected throughput
    - Consider future scaling needs
 
-2. **Retention**
+3. **Retention**
    - Set appropriate retention based on data importance
    - Consider storage costs
    - Align with business requirements
 
-3. **Environment Differences**
+4. **Environment Differences**
    - Use shorter retention in non-prod environments
-   - Consider lower partition counts in dev/staging
+   - Consider lower partition counts in dev/qa
    - Match production configuration for staging
 
-4. **Naming Conventions**
+5. **Naming Conventions**
    - Use descriptive names
    - Follow existing patterns (e.g., cdc_*, json_stage_*)
    - Include environment indicators if needed
 
 ### Example Topic Configurations
 
-```hcl
-# CDC Topic
-cdc_customer_data = {
-  partitions_count = 12
-  retention_ms    = 604800000  # 7 days
-  cleanup_policy  = "delete"
-  retention_bytes = -1
-}
+```yaml
+# In global.yaml
+global:
+  topic_defaults:
+    partitions_count: 6
+    retention_ms: 604800000
+    cleanup_policy: "delete"
+    retention_bytes: -1
 
-# JSON Stage Topic
-json_stage_events = {
-  partitions_count = 6
-  retention_ms    = 86400000  # 1 day
-  cleanup_policy  = "delete"
-  retention_bytes = -1
-}
+  base_topics:
+    # CDC Topic
+    cdc_customer_data:
+      partitions_count: 12
+      retention_ms: 604800000  # 7 days
+      cleanup_policy: "delete"
+      retention_bytes: -1
+
+    # JSON Stage Topic
+    json_stage_events:
+      partitions_count: 6
+      retention_ms: 86400000  # 1 day
+      cleanup_policy: "delete"
+      retention_bytes: -1
+
+# In dev.yaml
+env:
+  topics:
+    cdc_customer_data:
+      retention_ms: 86400000  # Override to 1 day in dev
 ```
 
 ### Topic Troubleshooting
@@ -119,6 +172,12 @@ json_stage_events = {
    - Verify YAML syntax
    - Check workspace selection
    - Confirm environment overrides
+   - Validate global.yaml configuration
+
+3. **Configuration Precedence Issues**
+   - Check global.yaml base_topics
+   - Verify environment-specific overrides
+   - Confirm topic_defaults settings
 
 ---
 
