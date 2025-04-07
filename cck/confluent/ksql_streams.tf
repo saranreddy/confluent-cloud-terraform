@@ -39,51 +39,75 @@ resource "null_resource" "ksql_statements" {
   provisioner "local-exec" {
     interpreter = ["/bin/bash", "-c"]
     command     = <<-EOT
-      # Function to make ksqlDB API calls
+      # Print debug information
+      echo "Debug: Starting ksqlDB stream creation"
+      echo "Debug: ksqlDB endpoint: ${confluent_ksql_cluster.ksql.rest_endpoint}"
+      echo "Debug: API Key ID: ${confluent_api_key.ksqldb-api-key.id}"
+      
+      # Test basic connectivity first with verbose output
+      echo "Testing basic connectivity..."
+      curl -v "${confluent_ksql_cluster.ksql.rest_endpoint}" 2>&1
+      
+      # Function to make ksqlDB API calls with verbose output
       call_ksqldb() {
         local endpoint="$1"
         local data="$2"
-        curl -s -X "POST" "$endpoint" \
+        echo "Debug: Calling endpoint: $endpoint"
+        echo "Debug: Request data: $data"
+        
+        # Use -v for verbose output and include HTTP headers
+        curl -v -X "POST" "$endpoint" \
           -H "Content-Type: application/vnd.ksql.v1+json" \
           -H "Accept: application/vnd.ksql.v1+json" \
           -u "${confluent_api_key.ksqldb-api-key.id}:${confluent_api_key.ksqldb-api-key.secret}" \
-          -d "$data"
+          -d "$data" 2>&1
       }
 
-      # Test cluster connectivity first
-      echo "Testing ksqlDB cluster connectivity..."
-      info_response=$(call_ksqldb "${confluent_ksql_cluster.ksql.rest_endpoint}/info" "{}")
-      echo "Info response: $info_response"
-      
-      if [ -z "$info_response" ]; then
-        echo "Error: No response from ksqlDB cluster"
-        exit 1
-      fi
+      # First, try to list existing streams
+      echo "Attempting to list existing streams..."
+      list_response=$(call_ksqldb "${confluent_ksql_cluster.ksql.rest_endpoint}/ksql" '{"ksql": "LIST STREAMS;"}')
+      echo "List streams response: $list_response"
 
-      # Try to create the stream
+      # Try to create the stream with explicit error handling
       echo "Attempting to create stream..."
-      create_data='{
-        "ksql": "${replace(replace(each.value.sql, "\n", " "), "\"", "\\\"")}",
-        "streamsProperties": {
-          "ksql.streams.auto.offset.reset": "earliest"
-        }
-      }'
+      create_data=$(cat <<EOF
+{
+  "ksql": "${replace(replace(each.value.sql, "\n", " "), "\"", "\\\"")}",
+  "streamsProperties": {
+    "ksql.streams.auto.offset.reset": "earliest"
+  }
+}
+EOF
+)
       
       echo "Request payload: $create_data"
+      
+      # Make the API call with full debugging
       response=$(call_ksqldb "${confluent_ksql_cluster.ksql.rest_endpoint}/ksql" "$create_data")
-      echo "Create stream response: $response"
-
-      if [ -z "$response" ]; then
-        echo "Error: No response received from create stream request"
+      status=$?
+      
+      echo "Debug: curl exit status: $status"
+      echo "Debug: Response: $response"
+      
+      # Check curl exit status
+      if [ $status -ne 0 ]; then
+        echo "Error: curl command failed with status $status"
         exit 1
       fi
 
-      if echo "$response" | grep -q "error"; then
+      # Check for empty response
+      if [ -z "$response" ]; then
+        echo "Error: Empty response from server"
+        exit 1
+      fi
+
+      # Check for error in response
+      if echo "$response" | grep -q '"error\|ERROR\|error_code"'; then
         echo "Error in response: $response"
         exit 1
       fi
 
-      echo "Stream creation completed"
+      echo "Stream creation completed successfully"
     EOT
   }
 
