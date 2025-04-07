@@ -1,11 +1,11 @@
 env:
   # Confluent Cloud Settings
-  ck_env_name: "dev"
-  ck_cluster_name: "dev-cluster"
-  ck_cluster_zone: "us-east-2"
-  ck_cluster_size: "basic"
+  ck_env_name: "Dev-tf"
+  ck_cluster_name: "Cluster Dev-tf"
+  ck_cluster_zone: "SINGLE_ZONE"
+  ck_cluster_size: 1
   ck_csu: 1
-  ck_rest_endpoint: "https://pkc-xxxxx.us-east-2.aws.confluent.cloud:443"
+  ck_rest_endpoint: "https://pkc-190gw6.us-east-2.aws.confluent.cloud:443"
 
   # PostgreSQL Connector Configuration
   postgres_host: "vpce-03cb75e950bbbac70-ptwgjqol.vpce-svc-0779b76d3fbee5cae.us-east-2.vpce.amazonaws.com"
@@ -14,13 +14,21 @@ env:
   postgres_password: "your-password-here" # Replace with actual password or use secrets management
   postgres_database: "Deposit_ODS"
 
-  # Topic configurations
+  # Snowflake Configuration
+  snowflake_url: "your-account.snowflakecomputing.com"
+  snowflake_user: "your-user"
+  snowflake_private_key: "your-private-key"
+  snowflake_database: "your-database"
+
+  # Topic configurations for dev environment
   topics:
+    # CDC Account Master Topics
     cdc_account_master_o_1200:
       partitions_count: 6
       retention_ms: 86400000 # 1 day
+
+    # Other Topics
     unified_records:
       partitions_count: 6
     unified_records_test:
       partitions_count: 6
-      retention_ms: 604800000 # 7 days
