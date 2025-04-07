@@ -1,0 +1,83 @@
+name: Push to branches
+
+on:
+  push:
+    branches: [ "dev" ]
+
+env:
+  CCK_BASIC_INFRA_DIRECTORY_PATH: "${{ vars.COMMON_SHORT_NAME }}/basic-infra"
+  CCK_CONFLUENT_DIRECTORY_PATH: "${{ vars.COMMON_SHORT_NAME }}/confluent"
+  AWS_REGION: "us-east-2"
+  WORKSPACE: "dev"
+
+jobs:
+  ### Common backend Infrastructure creation ###
+  create_common_backend_infra_dev:
+    environment: dev
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - uses: ./.github/actions/deploy-to-aws/backend
+        with:
+          aws_account_number: ${{ vars.AWS_ACCOUNT_NUMBER }}
+          aws_github_oidc_role: ${{ secrets.AWS_GITHUB_OIDC_ROLE }}
+          aws_region: ${{ env.AWS_REGION }}
+          terraform_workspace: ${{ env.WORKSPACE }}
+          common_short_name: ${{ vars.COMMON_SHORT_NAME }}
+          deploy: false
+
+  ### Confluent Cloud Kafka Infrastructure creation for dev ###
+  create_cck_basic_infra_dev:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    environment: dev
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - uses: ./.github/actions/deploy-to-aws/create
+        with:
+          aws_account_number: ${{ vars.AWS_ACCOUNT_NUMBER }}
+          aws_github_oidc_role: ${{ secrets.AWS_GITHUB_OIDC_ROLE }}
+          aws_region: ${{ env.AWS_REGION }}
+          terraform_workspace: ${{ env.WORKSPACE }}
+          cc_api_key: ${{ secrets.CC_API_KEY }}
+          cc_api_secret: ${{ secrets.CC_API_SECRET }}
+          common_short_name: ${{ vars.COMMON_SHORT_NAME }}
+          tf_directory_path: ${{ env.CCK_BASIC_INFRA_DIRECTORY_PATH }}
+          deploy: false
+
+  ### Confluent Cloud Kafka Infrastructure creation for dev ###
+  create_confluent_dev:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    environment: dev
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - uses: ./.github/actions/deploy-to-aws/create
+        with:
+          aws_account_number: ${{ vars.AWS_ACCOUNT_NUMBER }}
+          aws_github_oidc_role: ${{ secrets.AWS_GITHUB_OIDC_ROLE }}
+          aws_region: ${{ env.AWS_REGION }}
+          terraform_workspace: ${{ env.WORKSPACE }}
+          cc_api_key: ${{ secrets.CC_API_KEY }}
+          cc_api_secret: ${{ secrets.CC_API_SECRET }}
+          common_short_name: ${{ vars.COMMON_SHORT_NAME }}
+          tf_directory_path: ${{ env.CCK_CONFLUENT_DIRECTORY_PATH }}
+          deploy: true

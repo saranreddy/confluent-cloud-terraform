@@ -1,0 +1,97 @@
+name: 'Deploy Terraform with Workspace Support'
+description: 'Initializes and applies Terraform configurations with support for workspace selection'
+inputs:
+  bucket_path:
+    description: 'S3 Bucket path'
+    required: false
+  state_bucket_name:
+    description: 'S3 Bucket Name'
+    required: false
+  dynamodb_table:
+    description: 'Dynamo DB table Name'
+    required: false
+  aws_account_number:
+    description: 'AWS Account Number'
+    required: true
+  aws_github_oidc_role:
+    description: 'AWS oidc role for github to use to connect to aws'
+    required: true
+  aws_github_ssh_key:
+    description: 'SSH key for github actions to use to connect to common repo'
+    required: true
+  aws_region:
+    description: 'AWS Region'
+    required: true
+  terraform_directory:
+    description: 'Directory of Terraform configurations'
+    required: true
+  terraform_workspace:
+    description: 'Terraform workspace to use'
+    required: true
+  deploy:
+    description: 'Whether or not to deploy resources'
+    required: false
+    default: 'false'
+  vpc_id:
+    description: 'specify vpc_id'
+    required: true
+  private_subnets:
+    description: 'private_subnets'
+    required: true
+  common_short_name:
+    description: 'common_short_name'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: '1.0.0'
+
+    - name: Configure AWS Role Assumption
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: arn:aws:iam::${{ inputs.aws_account_number }}:role/${{ inputs.aws_github_oidc_role }}
+        role-duration-seconds: 900
+        aws-region: ${{ inputs.aws_region }}
+
+    - name: Initialize terraform and set workspace
+      shell: bash
+      env:
+        TF_VAR_aws_region: ${{ inputs.aws_region }}
+        TF_VAR_env: ${{ inputs.terraform_workspace }}
+        TF_VAR_vpc_id: ${{ inputs.vpc_id }}
+        TF_VAR_private_subnets: ${{ inputs.private_subnets }}
+        TF_VAR_common_short_name: ${{ inputs.common_short_name }}
+      run: |
+        cd ${{ inputs.terraform_directory }}
+        terraform init
+        terraform workspace select ${{ inputs.terraform_workspace }} || terraform workspace new ${{ inputs.terraform_workspace }}
+
+    - name: Plan Terraform
+      if: ${{ inputs.deploy == 'true' }}
+      shell: bash
+      env:
+        TF_VAR_aws_region: ${{ inputs.aws_region }}
+        TF_VAR_env: ${{ inputs.terraform_workspace }}
+        TF_VAR_vpc_id: ${{ inputs.vpc_id }}
+        TF_VAR_private_subnets: ${{ inputs.private_subnets }}
+        TF_VAR_common_short_name: ${{ inputs.common_short_name }}
+      run: |
+        cd ${{ inputs.terraform_directory }}
+        terraform plan
+
+    - name: Apply Terraform
+      if: ${{ inputs.deploy == 'true' }}
+      shell: bash
+      env:
+        TF_VAR_aws_region: ${{ inputs.aws_region }}
+        TF_VAR_env: ${{ inputs.terraform_workspace }}
+        TF_VAR_vpc_id: ${{ inputs.vpc_id }}
+        TF_VAR_private_subnets: ${{ inputs.private_subnets }}
+        TF_VAR_common_short_name: ${{ inputs.common_short_name }}
+      run: |
+        cd ${{ inputs.terraform_directory }}
+        terraform apply --auto-approve
