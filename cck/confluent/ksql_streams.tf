@@ -20,7 +20,7 @@ locals {
         WITH (
           KAFKA_TOPIC = 'cdc_customer_o_24201',
           VALUE_FORMAT = 'AVRO',
-          KEY_FORMAT = 'KAFKA'  -- Explicitly specify key format
+          KEY_FORMAT = 'KAFKA'
         );
       EOT
     }
@@ -39,68 +39,52 @@ resource "null_resource" "ksql_statements" {
   provisioner "local-exec" {
     interpreter = ["/bin/bash", "-c"]
     command     = <<-EOT
-      # Wait for ksqlDB cluster to be ready (retry for 5 minutes)
-      max_retries=30
-      retry_count=0
-      while [ "$retry_count" -lt "$max_retries" ]; do
-        # Try to list streams to check if cluster is ready
-        response=$(curl -s -X "POST" "${confluent_ksql_cluster.ksql.rest_endpoint}/ksql" \
+      # Function to make ksqlDB API calls
+      call_ksqldb() {
+        local endpoint="$1"
+        local data="$2"
+        curl -s -X "POST" "$endpoint" \
           -H "Content-Type: application/vnd.ksql.v1+json" \
           -H "Accept: application/vnd.ksql.v1+json" \
           -u "${confluent_api_key.ksqldb-api-key.id}:${confluent_api_key.ksqldb-api-key.secret}" \
-          -d '{"ksql": "LIST STREAMS;"}')
-        
-        # Check if the response indicates the cluster is ready
-        if echo "$response" | grep -q '"@type":"streams"'; then
-          echo "ksqlDB cluster is ready!"
-          break
-        fi
-        
-        echo "Waiting for ksqlDB cluster to be ready... (Attempt $((retry_count + 1)) of $max_retries)"
-        sleep 10
-        retry_count=$((retry_count + 1))
-      done
+          -d "$data"
+      }
 
-      if [ "$retry_count" -eq "$max_retries" ]; then
-        echo "Error: ksqlDB cluster not ready after 5 minutes. Last response: $response"
+      # Test cluster connectivity first
+      echo "Testing ksqlDB cluster connectivity..."
+      info_response=$(call_ksqldb "${confluent_ksql_cluster.ksql.rest_endpoint}/info" "{}")
+      echo "Info response: $info_response"
+      
+      if [ -z "$info_response" ]; then
+        echo "Error: No response from ksqlDB cluster"
         exit 1
       fi
 
-      # Attempt to execute ksqlDB statement with proper JSON escaping
-      response=$(curl -s -X "POST" "${confluent_ksql_cluster.ksql.rest_endpoint}/ksql" \
-        -H "Content-Type: application/vnd.ksql.v1+json" \
-        -H "Accept: application/vnd.ksql.v1+json" \
-        -u "${confluent_api_key.ksqldb-api-key.id}:${confluent_api_key.ksqldb-api-key.secret}" \
-        -d @- <<CURL_DATA
-{
-  "ksql": "${replace(replace(each.value.sql, "\n", " "), "\"", "\\\"")}",
-  "streamsProperties": {
-    "ksql.streams.auto.offset.reset": "earliest",
-    "ksql.streams.cache.max.bytes.buffering": "0"
-  }
-}
-CURL_DATA
-)
+      # Try to create the stream
+      echo "Attempting to create stream..."
+      create_data='{
+        "ksql": "${replace(replace(each.value.sql, "\n", " "), "\"", "\\\"")}",
+        "streamsProperties": {
+          "ksql.streams.auto.offset.reset": "earliest"
+        }
+      }'
+      
+      echo "Request payload: $create_data"
+      response=$(call_ksqldb "${confluent_ksql_cluster.ksql.rest_endpoint}/ksql" "$create_data")
+      echo "Create stream response: $response"
 
-      # Print full response for debugging
-      echo "ksqlDB Response: $response"
-
-      # Check if the response contains an error message
-      if echo "$response" | grep -q '"errorMessage"'; then
-        echo "Failed to create ksqlDB object ${each.value.name}. Error response: $response"
+      if [ -z "$response" ]; then
+        echo "Error: No response received from create stream request"
         exit 1
       fi
 
-      # Check if the response indicates success (either command status or statement text)
-      if ! echo "$response" | grep -q -e '"commandStatus":"SUCCESS"' -e '"statementText"'; then
-        echo "Failed to create ksqlDB object ${each.value.name}. Unexpected response: $response"
+      if echo "$response" | grep -q "error"; then
+        echo "Error in response: $response"
         exit 1
       fi
+
+      echo "Stream creation completed"
     EOT
-  }
-
-  lifecycle {
-    create_before_destroy = true
   }
 
   depends_on = [
