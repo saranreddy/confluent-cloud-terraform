@@ -1,4 +1,5 @@
 env:
+  # Confluent Cloud Settings
   ck_env_name: "dev"
   ck_cluster_name: "dev-cluster"
   ck_cluster_zone: "us-east-2"
@@ -13,7 +14,7 @@ env:
   postgres_password: "your-password-here" # Replace with actual password or use secrets management
   postgres_database: "Deposit_ODS"
 
-  # Topic configurations for dev environment
+  # Topic configurations
   topics:
     cdc_account_master_o_1200:
       partitions_count: 6
