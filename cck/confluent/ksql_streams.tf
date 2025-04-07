@@ -38,8 +38,30 @@ resource "null_resource" "ksql_statements" {
 
   provisioner "local-exec" {
     command = <<-EOT
+      # Wait for ksqlDB cluster to be ready (retry for 5 minutes)
+      max_retries=30
+      retry_count=0
+      while [ $retry_count -lt $max_retries ]; do
+        status_code=$(curl -s -o /dev/null -w "%%{http_code}" \
+          "${confluent_ksql_cluster.ksql.rest_endpoint}/info" \
+          -H "Accept: application/vnd.ksql.v1+json" \
+          -u "${confluent_api_key.ksqldb-api-key.id}:${confluent_api_key.ksqldb-api-key.secret}")
+        
+        if [ "$status_code" -eq 200 ]; then
+          break
+        fi
+        echo "Waiting for ksqlDB cluster to be ready... (Attempt $$((retry_count + 1)) of $max_retries)"
+        sleep 10
+        retry_count=$$((retry_count + 1))
+      done
+
+      if [ $retry_count -eq $max_retries ]; then
+        echo "Error: ksqlDB cluster not ready after 5 minutes"
+        exit 1
+      fi
+
       # Attempt to execute ksqlDB statement
-      response=$(curl -s -o /dev/null -w "%%{http_code}" -X "POST" "${confluent_ksql_cluster.ksql.rest_endpoint}/ksql" \
+      response=$(curl -s -X "POST" "${confluent_ksql_cluster.ksql.rest_endpoint}/ksql" \
         -H "Content-Type: application/vnd.ksql.v1+json" \
         -H "Accept: application/vnd.ksql.v1+json" \
         -u "${confluent_api_key.ksqldb-api-key.id}:${confluent_api_key.ksqldb-api-key.secret}" \
@@ -51,9 +73,15 @@ resource "null_resource" "ksql_statements" {
           }
         }')
 
+      # Get HTTP status code
+      status_code=$(echo "$response" | grep -o '"status": [0-9]*' | awk '{print $2}')
+
+      # Print full response for debugging
+      echo "ksqlDB Response: $response"
+
       # Check if the request was successful
-      if [ "$response" -ne 200 ]; then
-        echo "Failed to create ksqlDB object ${each.value.name}. HTTP status: $response"
+      if [ "$status_code" -ne 200 ]; then
+        echo "Failed to create ksqlDB object ${each.value.name}. Response: $response"
         exit 1
       fi
     EOT
@@ -67,6 +95,7 @@ resource "null_resource" "ksql_statements" {
   depends_on = [
     confluent_kafka_topic.topics,
     confluent_ksql_cluster.ksql,
-    confluent_role_binding.ksqldb_admin
+    confluent_role_binding.ksqldb_admin,
+    confluent_api_key.ksqldb-api-key
   ]
 } 
