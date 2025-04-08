@@ -6,6 +6,13 @@ global:
     cleanup_policy: "delete"
     retention_bytes: -1
   base_topics:
+    # Simple test topic for ksqlDB
+    simple_test_topic:
+      partitions_count: 6
+      retention_ms: 604800000
+      cleanup_policy: "delete"
+      retention_bytes: -1
+
     # CDC Account Master Topics
     cdc_account_master_o_1200:
       partitions_count: 6

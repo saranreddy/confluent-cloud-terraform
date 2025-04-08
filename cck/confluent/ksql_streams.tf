@@ -5,21 +5,18 @@
 locals {
   # Base ksqlDB configurations
   ksql_config = {
-    # Stream for CDC customer data
-    # This stream captures customer data changes from the CDC topic
-    cdc_customer_stream = {
-      name = "CDC_CUSTOMER_O_24201_SOURCE_STREAM"
+    # Simple test stream
+    simple_test_stream = {
+      name = "SIMPLE_TEST_STREAM"
       sql  = <<-EOT
-        CREATE STREAM IF NOT EXISTS cdc_customer_o_24201_source_stream (
-          -- Add schema definition here to ensure type safety
-          -- Example:
-          -- id INTEGER,
-          -- name STRING,
-          -- email STRING
+        CREATE STREAM IF NOT EXISTS simple_test_stream (
+          name STRING,
+          age INTEGER,
+          email STRING
         )
         WITH (
-          KAFKA_TOPIC = 'cdc_customer_o_24201',
-          VALUE_FORMAT = 'AVRO',
+          KAFKA_TOPIC = 'simple_test_topic',
+          VALUE_FORMAT = 'JSON',
           KEY_FORMAT = 'KAFKA'
         );
       EOT
