@@ -43,60 +43,89 @@ resource "null_resource" "ksql_statements" {
       echo "  - Endpoint: ${confluent_ksql_cluster.ksql.rest_endpoint}"
       echo "  - Cluster Name: ${confluent_ksql_cluster.ksql.display_name}"
       echo "  - Environment ID: ${confluent_ksql_cluster.ksql.environment[0].id}"
+      echo "  - API Key ID: ${confluent_api_key.ksqldb-api-key.id}"
       
-      # Configure Confluent CLI with the API key
-      echo "Configuring Confluent CLI..."
-      export CONFLUENT_CLOUD_API_KEY="${confluent_api_key.ksqldb-api-key.id}"
-      export CONFLUENT_CLOUD_API_SECRET="${confluent_api_key.ksqldb-api-key.secret}"
-      
-      # Create a temporary file for the SQL statement
-      SQL_FILE=$(mktemp)
-      echo "${each.value.sql}" > "$SQL_FILE"
-      
-      echo "SQL File contents:"
-      cat "$SQL_FILE"
-      
-      # First, verify the topic exists using Confluent CLI
+      # Function to make ksqlDB API calls
+      call_ksqldb() {
+        local endpoint="$1"
+        local data="$2"
+        echo "Debug: Calling endpoint: $endpoint"
+        echo "Debug: Request data: $data"
+        
+        # Base64 encode the API credentials
+        auth_header="Basic $(echo -n "${confluent_api_key.ksqldb-api-key.id}:${confluent_api_key.ksqldb-api-key.secret}" | base64)"
+        
+        response=$(curl -s -X POST "$endpoint" \
+          -H "Content-Type: application/vnd.ksql.v1+json" \
+          -H "Accept: application/vnd.ksql.v1+json" \
+          -H "Authorization: $auth_header" \
+          -d "$data")
+        
+        echo "API Response:"
+        echo "$response"
+        
+        # Return the response
+        echo "$response"
+      }
+
+      # First verify the topic exists
       echo "Verifying topic 'simple_test_topic' exists..."
-      if ! confluent kafka topic list | grep -q "simple_test_topic"; then
+      auth_header="Basic $(echo -n "${confluent_api_key.app-manager-api-key.id}:${confluent_api_key.app-manager-api-key.secret}" | base64)"
+      topic_check=$(curl -s -X GET "${local.ck_rest_endpoint}/topics/simple_test_topic" \
+        -H "Authorization: $auth_header")
+      
+      if ! echo "$topic_check" | grep -q "simple_test_topic"; then
         echo "Error: Topic 'simple_test_topic' not found"
-        rm "$SQL_FILE"
         exit 1
       fi
       
+      echo "Topic check response: $topic_check"
+
       # List existing streams before creation
       echo "Listing existing streams before creation..."
-      confluent ksql cluster list
+      before_list=$(call_ksqldb "${confluent_ksql_cluster.ksql.rest_endpoint}/ksql" '{"ksql": "SHOW STREAMS;"}')
+      echo "Existing streams: $before_list"
+
+      # Try to create the stream
+      echo "Attempting to create stream on cluster ${confluent_ksql_cluster.ksql.display_name}..."
+      create_data=$(cat <<EOF
+{
+  "ksql": "${replace(replace(each.value.sql, "\n", " "), "\"", "\\\"")}",
+  "streamsProperties": {
+    "ksql.streams.auto.offset.reset": "earliest"
+  }
+}
+EOF
+)
       
-      # Get the ksqlDB cluster ID
-      KSQLDB_ENDPOINT="${confluent_ksql_cluster.ksql.rest_endpoint}"
-      KSQLDB_CLUSTER_ID=$(echo "$KSQLDB_ENDPOINT" | cut -d'/' -f3 | cut -d'.' -f1)
+      echo "Request payload for stream creation:"
+      echo "$create_data"
       
-      echo "Using ksqlDB cluster ID: $KSQLDB_CLUSTER_ID"
+      # Make the API call for stream creation
+      create_response=$(call_ksqldb "${confluent_ksql_cluster.ksql.rest_endpoint}/ksql" "$create_data")
       
-      # Use the Confluent CLI to execute the ksqlDB statement
-      echo "Creating stream using Confluent CLI..."
-      confluent ksql cluster use "$KSQLDB_CLUSTER_ID"
-      
-      # Execute the SQL statement
-      confluent ksql statement execute --file "$SQL_FILE"
-      CREATE_STATUS=$?
-      
-      # Clean up the temporary file
-      rm "$SQL_FILE"
-      
-      if [ $CREATE_STATUS -ne 0 ]; then
-        echo "Error: Failed to create stream"
+      # Check for errors in the response
+      if echo "$create_response" | grep -q '"error":\|"errorMessage":\|"message":'; then
+        echo "Error in stream creation response:"
+        echo "$create_response"
         exit 1
       fi
       
-      # Verify the stream was created
+      # Wait a few seconds for the stream to be created
+      echo "Waiting for stream to be created..."
+      sleep 5
+      
+      # Verify stream was created by listing streams again
       echo "Verifying stream creation..."
-      if ! confluent ksql statement execute --cluster "$KSQLDB_CLUSTER_ID" --content-type "application/vnd.ksql.v1+json" '{"ksql": "LIST STREAMS;"}' | grep -q "SIMPLE_TEST_STREAM"; then
+      after_list=$(call_ksqldb "${confluent_ksql_cluster.ksql.rest_endpoint}/ksql" '{"ksql": "SHOW STREAMS;"}')
+      echo "Updated streams list: $after_list"
+      
+      # Check if our stream appears in the list
+      if ! echo "$after_list" | grep -q "SIMPLE_TEST_STREAM"; then
         echo "Error: SIMPLE_TEST_STREAM not found in streams list after creation"
         exit 1
       fi
-      
+
       echo "Stream creation verified successfully"
     EOT
   }
