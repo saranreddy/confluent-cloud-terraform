@@ -1,4 +1,3 @@
-
 # Fetch existing confluent kafka components
 data "confluent_environment" "env" {
   display_name = local.ck_env_name
@@ -118,7 +117,6 @@ resource "confluent_api_key" "postgres-api-key" {
   lifecycle {
     prevent_destroy = true
   }
-
 }
 
 resource "confluent_api_key" "precisely-api-key" {
@@ -144,7 +142,6 @@ resource "confluent_api_key" "precisely-api-key" {
   }
 }
 
-
 resource "confluent_api_key" "ksqldb-api-key" {
   display_name = "ksqldb-api-key"
   description  = "KsqlDB API Key that is owned by 'ksqldb' service account"
@@ -167,7 +164,6 @@ resource "confluent_api_key" "ksqldb-api-key" {
   lifecycle {
     prevent_destroy = true
   }
-
 }
 
 resource "confluent_api_key" "snowflake-api-key" {
@@ -192,12 +188,9 @@ resource "confluent_api_key" "snowflake-api-key" {
   lifecycle {
     prevent_destroy = true
   }
-
 }
 
-
 # Read existing SA Terraform
-
 data "confluent_service_account" "existing-SA" {
   display_name = "Terraform"
 }

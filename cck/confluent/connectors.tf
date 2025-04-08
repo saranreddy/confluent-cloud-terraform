@@ -1,4 +1,5 @@
-# Connector configurations
+# Connector configurations - Temporarily commented out for ksqlDB testing
+/*
 locals {
   # Base connector configurations
   postgres_sink_config = {
@@ -53,7 +54,7 @@ resource "confluent_connector" "postgres_sink" {
   config_nonsensitive = local.postgres_sink_config.nonsensitive
 
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
   }
 
   depends_on = [
@@ -61,4 +62,5 @@ resource "confluent_connector" "postgres_sink" {
     confluent_role_binding.postgres_admin,
     confluent_api_key.postgres-api-key
   ]
-} 
+}
+*/ 
