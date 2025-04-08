@@ -9,7 +9,7 @@ locals {
     simple_test_stream = {
       name = "SIMPLE_TEST_STREAM"
       sql  = <<-EOT
-        CREATE STREAM IF NOT EXISTS simple_test_stream (
+        CREATE STREAM IF NOT EXISTS SIMPLE_TEST_STREAM (
           name STRING,
           age INTEGER,
           email STRING
@@ -105,6 +105,11 @@ EOF
         echo "Error in response: $response"
         exit 1
       fi
+
+      # Verify stream creation by listing streams again
+      echo "Verifying stream creation..."
+      verify_response=$(call_ksqldb "${confluent_ksql_cluster.ksql.rest_endpoint}/ksql" '{"ksql": "LIST STREAMS;"}')
+      echo "Verification response: $verify_response"
 
       echo "Stream creation completed successfully on cluster ${confluent_ksql_cluster.ksql.display_name}"
     EOT
