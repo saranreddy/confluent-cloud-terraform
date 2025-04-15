@@ -219,24 +219,6 @@ resource "confluent_api_key" "env-manager-schema-registry-api-key" {
   }
 }
 
-# Create ksqlDB cluster
-resource "confluent_ksql_cluster" "ksql" {
-  display_name = "ksqlDB_cluster_0"
-  csu          = "${local.ck_csu}"
-  kafka_cluster {
-    id = data.confluent_kafka_cluster.cluster.id
-  }
-  credential_identity {
-    id = confluent_service_account.ksqldb.id
-  }
-  environment {
-    id = data.confluent_environment.env.id
-  }
-  depends_on = [
-    confluent_role_binding.ksqldb_admin
-  ]
-}
-
 # Create all topics using a single resource block
 resource "confluent_kafka_topic" "topics" {
   for_each = local.kafka_topics
